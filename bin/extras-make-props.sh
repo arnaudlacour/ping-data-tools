@@ -4,13 +4,14 @@ INSTANCE_BIN=$(cd `dirname $0`;pwd)
 INSTANCE_HOME=$(cd ${INSTANCE_BIN}/..;pwd)
 INSTANCE_CONF="${INSTANCE_HOME}/config"
 INSTANCE_PROPS="${INSTANCE_CONF}/tools.properties"
+EXTRAS_ENV="${INSTANCE_HOME}/extras-env"
 
 # source instance environment variables
-test -f ${INSTANCE_HOME} && . ${INSTANCE_HOME}/extra-env
+test -f ${EXTRAS_ENV} && . ${EXTRAS_ENV}
 
 usage ()
 {
-echo <<END_USAGE
+cat <<END_USAGE
 Usage: ${TOOL_NAME} {options}
     where {options} include:
 
