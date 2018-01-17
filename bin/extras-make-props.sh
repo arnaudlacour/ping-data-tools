@@ -284,8 +284,10 @@ for command in  audit-data-security backup collect-support-data dsconfig dsframe
         if ! test -z "${trustStorePath}" ; then
             echo ${command}.trustStorePath=${HOME}/.staging/truststore          >> ${props}
         else
-            echo ${command}.trustAll=ture                                       >> ${props}
+            echo ${command}.trustAll=true                                       >> ${props}
         fi
+    else
+        echo ${command}.useNoSecurity=true                                      >> ${props}
     fi
 
     case ${tasks} in  *"${command}"*)

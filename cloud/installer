@@ -1,0 +1,238 @@
+#!/bin/bash
+#
+# CONSTANTS
+#
+EXTENSIONS_DIR="extensions"
+
+#
+# VARIABLES
+#
+# whether to restart the instance after installation
+restartInstance=0
+
+# extension file name
+fileName=""
+
+# extension name (will not contain the file extension)
+extName=""
+
+# extension version (just the 4 digit suffix [0-9].[0-9].[0-9].[0-9])
+extVersion=""
+
+# the path to download the extension file to (/tmp by default but user configurable)
+downloadPath="/tmp"
+
+# the path to the downloaded extension file
+filePath=""
+
+# the path to the instance to which the extension should be deployed (default to current working directory)
+instancePath=""
+
+# whether to avoid updating the extension
+installOnly=0
+
+# whether to avoid installing the extension
+updateOnly=0
+
+#
+# Usage printing function
+#
+usage ()
+{
+cat <<END_USAGE
+Usage: installer {options}
+    where {options} include:
+
+    -d, --download-path
+        The file to write properties to
+  * -e, --extension
+        the name of the extension to retrieve from the repository and install or update
+    --help
+        Display general usage information
+    -I, --instance-path
+        Instance path to install or upgrade the extension to
+    -i, --install-only
+        Only install the extension, prevent update
+    -R, --restart
+        Restart the instance after configuration is applied
+    -u, --update-only
+        Only update the extension, prevent install
+END_USAGE
+exit 99
+}
+
+if test -z "$*" ; then
+    echo "Please provide the required arguments"
+    usage
+fi
+
+#
+# Parse the provided arguments, if any
+#
+while ! test -z "${1}" ; do
+    case "${1}" in
+        -d|--download-path)
+            shift
+            if test -z "${1}" ; then
+                echo "You must provide a path"
+                usage
+            fi
+            if ! test -d "${1}" ; then
+                echo "The provided path does not exist"
+                usage
+            fi
+            downloadPath="${1}"
+            ;;
+        -e|--extension)
+            shift
+            if test -z "${1}" ; then
+                echo "An extension name must be specified"
+                usage
+            fi
+            fileName="${1}.zip"
+            extName=${1%-?.?.?.?}
+            extVersion=${1##*-}
+            ;;
+        --help)
+            usage
+            ;;
+        -I|--instance-path)
+            shift
+            if test -z "${1}" ; then
+                echo "You must provide a path"
+                usage
+            fi
+            if ! test -d "${1}" ; then
+                echo "The provided path does not exist"
+                usage
+            fi
+            if ! test -d "${1}/extensions" ; then
+                echo "The provided path does not appear to be a valid Ping Data instance path"
+                usage
+            fi
+            instancePath="${1}"
+            ;;
+        -i|--install-only)
+            installOnly=1
+            ;;
+        -R|--restart)
+            restartInstance=1
+            ;;
+        -u|--update-only)
+            updateOnly=1
+            ;;
+        *)
+            echo "Unrecognized option"
+            usage
+            ;;
+    esac
+    shift
+done
+
+# compose the path to download the extension file to
+filePath="${downloadPath}/${fileName}"
+
+###############################################################################
+#                                 Verifications
+#
+#
+# 1 - the extension name must be provided
+#
+if test -z "${extName}" ; then
+  echo "The extension name is a required argument"
+  usage
+fi
+#
+# 2 - verify that the path looks like a valid Ping Data instance path
+#
+if ! test -z "${instancePath}" ; then
+    cd "${instancePath}"
+fi
+if ! test -d "lib/${EXTENSIONS_DIR}" ; then
+    echo "The path does not look like a valid Ping Data instance path"
+    exit 92
+fi
+
+#
+# Do not cache extension files
+#
+rm -f "${filePath}"
+#
+# Download the extension
+#
+curl -so "${filePath}" "https://extensions.ping.directory/${extName}/${extVersion}/${fileName}"
+
+#
+# Verify that the download worked properly
+#
+if ! test -f "${filePath}" ; then
+    echo Error downloading extension $1
+    exit 97
+fi
+
+#
+#                                 Verifications
+###############################################################################
+
+
+extensionPath="${EXTENSIONS_DIR}/${extName}"
+
+#
+# check if the extension has already been installed before
+#
+if test -d "${extensionPath}" ; then
+    #
+    # Verify if we are allowed to update the extension or not
+    #
+    if test ${installOnly} -eq 1 ; then
+        echo "Extension ${extName} is already installed and marked for installation only"
+        exit 94
+    fi
+
+    #
+    # Update the extension non-interactively
+    #
+    bin/manage-extension --update "${filePath}" -n
+
+    #
+    # Restart instance if requested
+    #
+    if test ${restartInstance} -eq 1 ; then
+        bin/stop-* -R
+    fi
+else
+    #
+    # Verify if we are allowed to install the extension or not
+    #
+    if test ${updateOnly} -eq 1 ; then
+        echo "Echo ${extName} is not installed and marked for update only"
+        exit 93
+    fi
+
+    #
+    # Install the extension non-interactively
+    #
+    bin/manage-extension --install "${filePath}" -n
+
+    #
+    # Apply the installation batch non-interactively
+    #
+    batch="${extensionPath}/config/install.dsconfig"
+    if test -f "${batch}" ; then
+        bin/dsconfig --applyChangeTo single-server -n -F "${batch}"
+        #
+        # Print a useful message to the operator in case something prevented dsconfig to proceed successfully
+        #
+        if ! test $? -eq 0 ; then
+            echo "To finish installing this extension, execute this command:"
+            echo "bin/dsconfig -n -F \"${batch}\""
+        fi
+    fi
+
+    #
+    # Restart instance if requested explicitly or in the install batch file
+    #
+    if test ${restartInstance} -eq 1 || grep -c "^#RESTART REQUIRED" ${batch} >/dev/null ; then
+        bin/stop-* -R
+    fi
+fi
