@@ -11,7 +11,7 @@ syntax keyword operationType ABANDON ADD BIND CONNECT DELETE DISCONNECT EXTENDED
 highlight link operationType Keyword
 
 syntax match pingError 	        'resultCode=[^0]\d*'
-highlight link pingError 	    ErrorMsg
+highlight link pingError     ErrorMsg
 
 syntax region purpose start=/administrativeOperation="/hs=s+25 end=/"/he=e-1
 syntax region purpose start=/opPurpose="/hs=s+11 end=/"/he=e-1
@@ -28,12 +28,10 @@ highlight resultCodeName cterm=standout
 
 syntax region logString 	    start=/'/hs=s+1 end=/'/he=e-1 end=/$/ skip=/\\./  
 syntax region logString 	    start=/"/hs=s+1 end=/"/he=e-1 end=/$/ skip=/\\./
-highlight def link logString 	String
+highlight link logString String
 
-
-syntax match logNumber 	    '0x[0-9a-fA-F]*\|\[<[0-9a-f]\+>\]\|\<\d[0-9a-fA-F]*'
-syntax match logNumber 	    '=\d\+\.?\d* '
-highlight link logumber 	Constant
+syntax match logNumber 	    /=\d\d*\.\=\d* /hs=s+1,he=e-1
+highlight link logNumber Number
 
 syntax region logDate start=/^\[/hs=s+1 end=/:/he=e-1
 highlight link logDate Type
